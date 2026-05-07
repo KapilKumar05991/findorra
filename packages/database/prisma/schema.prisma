@@ -1,0 +1,635 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  BUSINESS_OWNER
+  ADMIN
+  SUPER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum BusinessStatus {
+  PENDING_REVIEW
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER // ₹999/mo — highlighted listing
+  PRO // ₹2999/mo — + lead manager, analytics
+  ENTERPRISE // ₹7999/mo — + priority support, ads
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO
+  LOGO
+  COVER
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  FLAGGED
+  REMOVED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritialStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum Occupation {
+  EMPLOYED
+  UNEMPLOYED
+  BUSINEESSMAN
+  RETIRED
+  STUDENT
+  OTHER
+}
+
+// User Auth
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String?
+  phone             String?   @unique
+  name              String
+  image             String?
+  emailVerified     DateTime?
+  role              UserRole  @default(USER)
+  status            Status    @default(ACTIVE)
+  is_email_verified Boolean   @default(false)
+  is_phone_verified Boolean   @default(false)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  deleted_at        DateTime?
+
+  // Relations
+  accounts         Account[]
+  sessions         Session[]
+  businesses       Business[]      @relation("BusinessOwner")
+  reviews          Review[]
+  bookings         Booking[]
+  leads            Lead[]          @relation("LeadUser")
+  saved_businesses SavedBusiness[]
+  notifications    Notification[]
+  claims           BusinessClaim[]
+  profile          Profile?
+  location         Location?
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Profile {
+  id              String         @id @default(cuid())
+  user_id         String         @unique
+  dob             DateTime
+  gender          Gender
+  maritial_status MaritialStatus
+  occupation      Occupation
+  user            User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+// Not in use till now
+model Session {
+  id            String   @id @default(cuid())
+  user_id       String
+  refresh_token String   @unique
+  ip_address    String?
+  user_agent    String?
+  expires_at    DateTime
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([refresh_token])
+}
+
+model Token {
+  id         String   @id @default(cuid())
+  identifier String   @unique
+  token      String   @unique
+  expires_at DateTime
+
+  @@index([identifier, token])
+}
+
+// Categories
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon_url    String?
+  parent_id   String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  parent     Category?          @relation("CategoryTree", fields: [parent_id], references: [id])
+  children   Category[]         @relation("CategoryTree")
+  businesses BusinessCategory[]
+
+  @@index([slug])
+  @@index([parent_id])
+}
+
+// Business listing
+
+model Business {
+  id          String         @id @default(cuid())
+  owner_id    String
+  name        String
+  slug        String         @unique
+  description String?
+  tagline     String?
+  status      BusinessStatus @default(PENDING_REVIEW)
+  is_verified Boolean        @default(false)
+  is_featured Boolean        @default(false)
+
+  // Stats (denormalized for perf — updated via triggers/jobs)
+  rating_avg   Float @default(0)
+  rating_count Int   @default(0)
+  view_count   Int   @default(0)
+  lead_count   Int   @default(0)
+
+  // SEO
+  meta_title       String?
+  meta_description String?
+  keywords         String[]
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  owner            User                @relation("BusinessOwner", fields: [owner_id], references: [id])
+  location         Location?
+  contact          Contact?
+  categories       BusinessCategory[]
+  media            BusinessMedia[]
+  faqs             BusinessFAQ[]
+  reviews          Review[]
+  bookings         Booking[]
+  leads            Lead[]
+  attributes       BusinessAttribute[]
+  subscription     Subscription?
+  claims           BusinessClaim[]
+  saved_by         SavedBusiness[]
+  business_hours   BusinessHour[]
+  analytics_events AnalyticsEvent[]
+
+  @@unique([name, owner_id])
+  @@index([slug])
+  @@index([status])
+  @@index([owner_id])
+  @@index([is_featured, rating_avg(sort: Desc)])
+}
+
+model BusinessHour {
+  id          String  @id @default(cuid())
+  day         String
+  open        String?
+  close       String?
+  closed      Boolean @default(false)
+  business_id String
+
+  // Relations
+  business Business @relation(fields: [business_id], references: [id])
+}
+
+model Location {
+  id          String  @id @default(cuid())
+  address     String
+  landmark    String?
+  area        String?
+  city        String
+  state       String
+  pincode     String
+  country     String  @default("India")
+  latitude    Float?
+  longitude   Float?
+  business_id String? @unique
+  user_id     String? @unique
+
+  // Relations
+  business Business? @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([area, pincode])
+  @@index([city, state])
+}
+
+model Contact {
+  id          String  @id @default(cuid())
+  person      String  @default("")
+  designation String? @default("")
+  phone       String
+  whatsapp    String?
+  email       String?
+  website     String?
+  instagram   String?
+  facebook    String?
+  twitter     String?
+  linkedin    String?
+  youtube     String?
+  business_id String  @unique
+
+  // Relations
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id])
+}
+
+model BusinessCategory {
+  business_id String
+  category_id String
+  is_primary  Boolean @default(false)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@id([business_id, category_id])
+  @@index([category_id])
+}
+
+model BusinessMedia {
+  id            String    @id @default(cuid())
+  business_id   String
+  type          MediaType
+  url           String
+  thumbnail_url String?
+  caption       String?
+  sort_order    Int       @default(0)
+  created_at    DateTime  @default(now())
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id, type])
+}
+
+// Key-value attributes per business (e.g. "WiFi: Yes", "Parking: Street")
+model BusinessAttribute {
+  id          String @id @default(cuid())
+  business_id String
+  key         String
+  value       String
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@unique([business_id, key])
+}
+
+model BusinessClaim {
+  id          String      @id @default(cuid())
+  business_id String
+  user_id     String
+  status      ClaimStatus @default(PENDING)
+  documents   String[] // S3 URLs for verification docs
+  notes       String?
+  reviewed_by String?
+  reviewed_at DateTime?
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id])
+  user     User     @relation(fields: [user_id], references: [id])
+
+  @@index([business_id])
+  @@index([status])
+}
+
+model BusinessFAQ {
+  id          String   @id @default(cuid())
+  business_id String
+  question    String
+  answer      String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id])
+
+  @@index([business_id])
+}
+
+// Reviews
+
+model Review {
+  id               String       @id @default(cuid())
+  business_id      String
+  user_id          String
+  rating           Int // 1–5
+  title            String?
+  body             String?
+  status           ReviewStatus @default(PUBLISHED)
+  helpful_count    Int          @default(0)
+  owner_reply      String?
+  owner_replied_at DateTime?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  deleted_at       DateTime?
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [user_id], references: [id])
+
+  @@unique([business_id, user_id]) // one review per user per business
+  @@index([business_id, status])
+}
+
+// Bookings & Leads
+
+model Booking {
+  id            String        @id @default(cuid())
+  business_id   String
+  user_id       String
+  service_name  String?
+  scheduled_at  DateTime
+  duration_mins Int?
+  status        BookingStatus @default(PENDING)
+  notes         String?
+  amount        Int? // in paise (₹1 = 100 paise)
+  payment_id    String?
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id])
+  user     User     @relation(fields: [user_id], references: [id])
+  payment  Payment? @relation(fields: [payment_id], references: [id])
+
+  @@index([business_id, scheduled_at])
+  @@index([user_id])
+}
+
+model Lead {
+  id          String     @id @default(cuid())
+  business_id String
+  user_id     String?
+  name        String
+  phone       String
+  email       String?
+  message     String?
+  status      LeadStatus @default(NEW)
+  source      String? // search | profile | ad
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id])
+  user     User?    @relation("LeadUser", fields: [user_id], references: [id])
+
+  @@index([business_id, status])
+  @@index([phone])
+}
+
+// Subscriptions & Payments
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  business_id          String             @unique
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  razorpay_sub_id      String?            @unique
+  current_period_start DateTime?
+  current_period_end   DateTime?
+  cancel_at            DateTime?
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
+
+  business Business  @relation(fields: [business_id], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  subscription_id     String?
+  amount              Int // paise
+  currency            String        @default("INR")
+  status              PaymentStatus @default(PENDING)
+  razorpay_order_id   String?
+  razorpay_payment_id String?
+  razorpay_signature  String?
+  metadata            Json?
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+
+  subscription Subscription? @relation(fields: [subscription_id], references: [id])
+  bookings     Booking[]
+
+  @@index([razorpay_payment_id])
+}
+
+// Saved Businesses
+
+model SavedBusiness {
+  user_id     String
+  business_id String
+  created_at  DateTime @default(now())
+
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, business_id])
+}
+
+// Notifications
+
+model Notification {
+  id         String    @id @default(cuid())
+  user_id    String
+  title      String
+  body       String
+  type       String // booking_confirmed | new_review | lead | etc.
+  data       Json?
+  read_at    DateTime?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, read_at])
+}
+
+// Analytics
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  business_id String
+  event_type  String // view | call_click | direction_click | whatsapp_click | website_click
+  session_id  String?
+  user_id     String?
+  metadata    Json?
+  created_at  DateTime @default(now())
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id, event_type, created_at])
+}
+
+model Country {
+  id           String @id @default(cuid())
+  name         String
+  flag         String
+  iso_code     String
+  country_code String
+
+  // Relations
+  states State[]
+}
+
+model State {
+  id         String @id @default(cuid())
+  name       String
+  country_id String
+
+  // Relations
+  cities  City[]
+  country Country @relation(fields: [country_id], references: [id])
+}
+
+model City {
+  id          String  @id @default(cuid())
+  name        String
+  description String
+  image       String
+  metro_map   String?
+  latitude    Float
+  longitude   Float
+  state_id    String
+
+  // Relations
+  places         Place[]
+  areas          Area[]
+  foods          Food[]
+  metro_stations MetroStation[]
+  state          State          @relation(fields: [state_id], references: [id])
+}
+
+model Area {
+  id      String @id @default(cuid())
+  name    String
+  pincode String
+  city_id String
+
+  // Relations
+  city City @relation(fields: [city_id], references: [id])
+}
+
+model Place {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  image       String
+  langitude   Float
+  latitude    Float
+  city_id     String
+
+  city City @relation(fields: [city_id], references: [id])
+}
+
+model Food {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  image       String
+  city_id     String
+
+  // Relations
+  city City @relation(fields: [city_id], references: [id])
+}
+
+model MetroStation {
+  id        String @id @default(cuid())
+  name      String
+  city_id   String
+  langitude Float
+  latitude  Float
+
+  // Relations
+  city City @relation(fields: [city_id], references: [id])
+}
