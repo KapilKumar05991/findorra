@@ -6,13 +6,15 @@ export async function GET(req: NextRequest) {
     const q = query.get("q")
     const area = query.get("area")
     const city = query.get("city")
+    const postcode = query.get("postcode")
 
-    if (!q || q.length < 2 || !city) {
+    if (!q) {
         return NextResponse.json({
             success: false,
-            error: "Query must be at least 2 characters long or city is required"
+            error: "Query is required"
         }, { status: 400 })
     }
+    
     try {
         const categories = await prisma.category.findMany({
             where: {
@@ -31,10 +33,14 @@ export async function GET(req: NextRequest) {
                     mode: "insensitive"
                 },
                 location: {
-                    city: {
+                    city: city ? {
                         equals: city,
                         mode: "insensitive"
-                    },
+                    }: undefined,
+                    pincode: postcode ? {
+                        equals: postcode,
+                        mode: "insensitive"
+                    }: undefined,
                     area: area ? {
                         equals: area,
                         mode: "insensitive"
@@ -46,10 +52,8 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            data: {
-                categories,
-                businesses
-            }
+            categories,
+            businesses
         })
 
     } catch (error) {

@@ -14,12 +14,13 @@ import z from "zod";
 
 type Props = {
     bizId: string;
-    setStep: React.Dispatch<React.SetStateAction<string>>;
+    update?: boolean;
+    action?: () => void;
 }
 
 async function fetchCategories(parent: string | null) {
     const res = await fetch(`/api/categories?parentId=${parent}`)
-    return res.json()
+    return await res.json()
 }
 
 async function updateCategory(bizId: string, data: z.infer<typeof businessCategoriesSchema>) {
@@ -31,11 +32,16 @@ async function updateCategory(bizId: string, data: z.infer<typeof businessCatego
         body: JSON.stringify(data),
     }
     )
-    return res.json()
+    return await res.json()
+}
+
+async function fetchCategory(bizId: string) {
+    const res = await fetch(`/api/businesses/${bizId}/category`)
+    return await res.json()
 }
 
 
-export default function CategoryForm({ bizId, setStep }: Props) {
+export default function CategoryForm({ bizId, action, update = false }: Props) {
     const [primaryOption, setPrimaryOption] = useState<{ id: string, name: string }[]>([])
     const [secondaryOption, setSecondaryOption] = useState<{ id: string, name: string }[]>([])
 
@@ -50,7 +56,6 @@ export default function CategoryForm({ bizId, setStep }: Props) {
     useEffect(()=> {
         startTransition(async () => {
             const result = await fetchCategories(null)
-            console.log(result)
             if (result.success) {
                 setPrimaryOption(result.data)
             } else {
@@ -60,15 +65,28 @@ export default function CategoryForm({ bizId, setStep }: Props) {
 
     },[bizId])
 
+    useEffect(() => {
+        if(update) {
+            startTransition(async () => {
+                const result = await fetchCategory(bizId)
+                if(result.success) {
+                    form.setValue("primary",result.data.primary.category_id || "")
+                    form.setValue("secondary",result.data.secondary.map((bcat: any)=> (bcat.category_id)))
+                } else {
+                    toast.error(result.error)
+                }
+            })
+        }
+    },[bizId])
+
 
     const [isPending, startTransition] = useTransition()
     async function onSubmit(data: z.infer<typeof businessCategoriesSchema>) {
-        console.log(data)
         startTransition(async () => {
             const result = await updateCategory(bizId,data)
             if (result.success) {
                 toast.success(result.message)
-                setStep(step => String(parseInt(step) + 1));
+                action?.()
             }
             else {
                 toast.error(result.error)
@@ -164,9 +182,7 @@ export default function CategoryForm({ bizId, setStep }: Props) {
                         </Field>)}
                 />
                 <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setStep(step => String(parseInt(step) + 1))}>Skip
-                    </Button>
-                    <Button disabled={isPending} form="category-form" type="submit">{isPending ? <Loader2 className="size-5 animate-spin" /> : "Save & Continue"}</Button>
+                    <Button disabled={isPending} form="category-form" type="submit">{isPending ? <Loader2 className="size-5 animate-spin" /> : "Save"}</Button>
                 </div>
             </FieldGroup>
         </form >

@@ -7,18 +7,32 @@ import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from
 import { Input } from "@repo/ui/components/input";
 import { toast } from "@repo/ui/lib/utils";
 import { Loader2 } from "lucide-react";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import z from "zod";
 
 type Props = {
     bizId: string;
     update?: boolean,
-    setStep: React.Dispatch<React.SetStateAction<string>>;
+    action?: () => void;
 }
 
 
-export default function ContactForm({ bizId, update = false, setStep }: Props) {
+async function fetchContact(bizId: string) {
+    const res = await fetch(`/api/businesses/${bizId}/contact`);
+    return await res.json()
+}
+
+async function updateContact(bizId: string, data: z.infer<typeof businessContactSchema>) {
+    const res = await fetch(`/api/businesses/${bizId}/contact`, {
+        method: "POST",
+        body: JSON.stringify(data)
+    })
+
+    return await res.json()
+}
+
+export default function ContactForm({ bizId, update = false, action }: Props) {
     const [isPending, startTransition] = useTransition();
 
     const form = useForm<z.infer<typeof businessContactSchema>>({
@@ -38,23 +52,40 @@ export default function ContactForm({ bizId, update = false, setStep }: Props) {
         },
     })
     function onSubmit(data: z.infer<typeof businessContactSchema>) {
-
         startTransition(async () => {
-            const res = await fetch(`/api/businesses/${bizId}/contact`, {
-                method: "POST",
-                body: JSON.stringify(data)
-            })
-
-            const result = await res.json()
+            const result = await updateContact(bizId,data)
             if (result.success) {
                 toast.success(result.message)
-                setStep(step => String(parseInt(step) + 1));
+                action?.()
             } else {
                 toast.error(result.error)
             }
         })
 
     }
+
+    useEffect(() => {
+        if(update) {
+            startTransition(async () => {
+                const result = await fetchContact(bizId)
+                if(result.success) {
+                    form.setValue("phone",result.data.phone)
+                    form.setValue("whatsapp",result.data.whatsapp)
+                    form.setValue("email",result.data.email)
+                    form.setValue("person",result.data.person)
+                    form.setValue("designation",result.data.designation || "")
+                    form.setValue("website",result.data.website || "")
+                    form.setValue("facebook",result.data.facebook || "")
+                    form.setValue("instagram",result.data.instagram || "")
+                    form.setValue("twitter",result.data.twitter || "")
+                    form.setValue("youtube",result.data.youtube || "")
+                    form.setValue("linkedin",result.data.linkedin || "")
+                } else {
+                    toast.error(result.error)
+                }
+            })
+        }
+    },[])
     return (
         <form id="contact-form" onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup>
@@ -197,10 +228,8 @@ export default function ContactForm({ bizId, update = false, setStep }: Props) {
                     />
                 </div>}
                 <div className="flex justify-end">
-                    <Button onClick={() => { setStep(String(parseInt("2"))) }} type="button" variant="ghost">Skip</Button>
-
                     <Button disabled={isPending} className="cursor-pointer" form="contact-form" type="submit">
-                        {isPending ? <Loader2 className="size-5 animate-spin" />: "Save & Continue"}
+                        {isPending ? <Loader2 className="size-5 animate-spin" />: "Save"}
                     </Button>
 
                 </div>

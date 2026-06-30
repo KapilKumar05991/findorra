@@ -1,0 +1,31 @@
+
+> web@0.1.0 typecheck
+> tsc --noEmit
+
+.next/dev/types/validator.ts(270,31): error TS2344: Type 'typeof import("D:/Kapil/repos/findorra/apps/web/app/api/auth/[...nextauth]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/auth/[...nextauth]">'.
+  Types of property 'GET' are incompatible.
+    Type '(req: NextRequest) => Promise<Response>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ nextauth: string[]; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters 'req' and 'request' are incompatible.
+        Type 'import("D:/Kapil/repos/findorra/apps/web/node_modules/next/dist/server/web/spec-extension/request").NextRequest' is not assignable to type 'import("D:/Kapil/repos/findorra/node_modules/next/dist/server/web/spec-extension/request").NextRequest'.
+          Types of property 'nextUrl' are incompatible.
+            Property '[Internal]' is missing in type 'import("D:/Kapil/repos/findorra/apps/web/node_modules/next/dist/server/web/next-url").NextURL' but required in type 'import("D:/Kapil/repos/findorra/node_modules/next/dist/server/web/next-url").NextURL'.
+app/(site)/(search)/[city]/[slug]/[id]/page.tsx(37,52): error TS2339: Property 'business_hours' does not exist on type '{ name: string; description: string | null; tagline: string | null; id: string; status: BusinessStatus; created_at: Date; updated_at: Date; deleted_at: Date | null; ... 10 more ...; keywords: string[]; } & { ...; }'.
+app/(site)/(search)/[city]/[slug]/[id]/page.tsx(115,52): error TS2339: Property 'address_line1' does not exist on type '{ landmark: string | null; address: string; area: string | null; city: string; state: string; pincode: string; id: string; user_id: string | null; country: string; latitude: number | null; longitude: number | null; business_id: string | null; }'.
+app/(site)/(search)/[city]/[slug]/[id]/page.tsx(325,60): error TS2339: Property 'address_line1' does not exist on type '{ landmark: string | null; address: string; area: string | null; city: string; state: string; pincode: string; id: string; user_id: string | null; country: string; latitude: number | null; longitude: number | null; business_id: string | null; }'.
+app/(site)/(search)/[city]/[slug]/[id]/page.tsx(326,60): error TS2339: Property 'address_line2' does not exist on type '{ landmark: string | null; address: string; area: string | null; city: string; state: string; pincode: string; id: string; user_id: string | null; country: string; latitude: number | null; longitude: number | null; business_id: string | null; }'.
+app/api/businesses/route.ts(2,39): error TS2307: Cannot find module '@/lib/queries/business' or its corresponding type declarations.
+components/business/business-card.tsx(68,36): error TS2339: Property 'address_line1' does not exist on type '{ landmark: string | null; address: string; area: string | null; city: string; state: string; pincode: string; id: string; user_id: string | null; country: string; latitude: number | null; longitude: number | null; business_id: string | null; }'.
+components/providers/search-store-provider.tsx(6,15): error TS2305: Module '"@/stores/search-store"' has no exported member 'CounterStore'.
+components/providers/search-store-provider.tsx(6,29): error TS2305: Module '"@/stores/search-store"' has no exported member 'createCounterStore'.
+lib/queries/user.ts(98,75): error TS2344: Type '"landmark" | "area" | "city" | "state" | "pincode" | "address_line1"' does not satisfy the constraint '"landmark" | "address" | "area" | "city" | "state" | "pincode" | "id" | "user_id" | "country" | "latitude" | "longitude" | "business_id"'.
+  Type '"address_line1"' is not assignable to type '"landmark" | "address" | "area" | "city" | "state" | "pincode" | "id" | "user_id" | "country" | "latitude" | "longitude" | "business_id"'.
+lib/queries/user.ts(104,9): error TS2322: Type '{ user_id: string; landmark: string | null; area: string | null; city: string; state: string; pincode: string; address_line1: unknown; }' is not assignable to type '(Without<LocationCreateInput, LocationUncheckedCreateInput> & LocationUncheckedCreateInput) | (Without<...> & LocationCreateInput)'.
+  Type '{ user_id: string; landmark: string | null; area: string | null; city: string; state: string; pincode: string; address_line1: unknown; }' is not assignable to type 'Without<LocationCreateInput, LocationUncheckedCreateInput> & LocationUncheckedCreateInput'.
+    Property 'address' is missing in type '{ user_id: string; landmark: string | null; area: string | null; city: string; state: string; pincode: string; address_line1: unknown; }' but required in type 'LocationUncheckedCreateInput'.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 1
+npm error path D:\Kapil\repos\findorra\apps\web
+npm error workspace web@0.1.0
+npm error location D:\Kapil\repos\findorra\apps\web
+npm error command failed
+npm error command C:\windows\system32\cmd.exe /d /s /c tsc --noEmit

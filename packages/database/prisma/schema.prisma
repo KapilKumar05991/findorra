@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -43,7 +38,6 @@ enum BookingStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
-  NO_SHOW
 }
 
 enum LeadStatus {
@@ -55,9 +49,9 @@ enum LeadStatus {
 
 enum SubscriptionPlan {
   FREE
-  STARTER // ₹999/mo — highlighted listing
-  PRO // ₹2999/mo — + lead manager, analytics
-  ENTERPRISE // ₹7999/mo — + priority support, ads
+  STARTER
+  PRO
+  ENTERPRISE
 }
 
 enum SubscriptionStatus {
@@ -110,6 +104,16 @@ enum Occupation {
   OTHER
 }
 
+enum WeekDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
 // User Auth
 model User {
   id                String    @id @default(cuid())
@@ -130,10 +134,9 @@ model User {
   // Relations
   accounts         Account[]
   sessions         Session[]
-  businesses       Business[]      @relation("BusinessOwner")
-  reviews          Review[]
-  bookings         Booking[]
-  leads            Lead[]          @relation("LeadUser")
+  businesses       Business[]       @relation("BusinessOwner")
+  reviews          BusinessReview[]
+  leads            BusinessLead[]   @relation("LeadUser")
   saved_businesses SavedBusiness[]
   notifications    Notification[]
   claims           BusinessClaim[]
@@ -201,18 +204,15 @@ model Token {
 }
 
 // Categories
-
 model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  slug        String   @unique
-  description String?
-  icon_url    String?
-  parent_id   String?
-  sort_order  Int      @default(0)
-  is_active   Boolean  @default(true)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  icon_url   String?
+  parent_id  String?
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   parent     Category?          @relation("CategoryTree", fields: [parent_id], references: [id])
   children   Category[]         @relation("CategoryTree")
@@ -226,14 +226,14 @@ model Category {
 
 model Business {
   id          String         @id @default(cuid())
-  owner_id    String
+  owner_id    String?
   name        String
   slug        String         @unique
   description String?
   tagline     String?
+  yoe         DateTime?
   status      BusinessStatus @default(PENDING_REVIEW)
   is_verified Boolean        @default(false)
-  is_featured Boolean        @default(false)
 
   // Stats (denormalized for perf — updated via triggers/jobs)
   rating_avg   Float @default(0)
@@ -244,39 +244,34 @@ model Business {
   // SEO
   meta_title       String?
   meta_description String?
-  keywords         String[]
 
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
   // Relations
-  owner            User                @relation("BusinessOwner", fields: [owner_id], references: [id])
-  location         Location?
-  contact          Contact?
-  categories       BusinessCategory[]
-  media            BusinessMedia[]
-  faqs             BusinessFAQ[]
-  reviews          Review[]
-  bookings         Booking[]
-  leads            Lead[]
-  attributes       BusinessAttribute[]
-  subscription     Subscription?
-  claims           BusinessClaim[]
-  saved_by         SavedBusiness[]
-  business_hours   BusinessHour[]
-  analytics_events AnalyticsEvent[]
+  owner          User?              @relation("BusinessOwner", fields: [owner_id], references: [id])
+  location       Location?
+  contact        Contact?
+  categories     BusinessCategory[]
+  media          BusinessMedia[]
+  faqs           BusinessFAQ[]
+  reviews        BusinessReview[]
+  leads          BusinessLead[]
+  amentities     BusinessAmenity[]
+  subscription   Subscription?
+  claims         BusinessClaim[]
+  saved_by       SavedBusiness[]
+  business_hours BusinessHour[]
 
   @@unique([name, owner_id])
   @@index([slug])
   @@index([status])
   @@index([owner_id])
-  @@index([is_featured, rating_avg(sort: Desc)])
 }
 
 model BusinessHour {
-  id          String  @id @default(cuid())
-  day         String
+  day         WeekDay
   open        String?
   close       String?
   closed      Boolean @default(false)
@@ -284,6 +279,8 @@ model BusinessHour {
 
   // Relations
   business Business @relation(fields: [business_id], references: [id])
+
+  @@id([business_id, day])
 }
 
 model Location {
@@ -311,7 +308,7 @@ model Location {
 model Contact {
   id          String  @id @default(cuid())
   person      String  @default("")
-  designation String? @default("")
+  designation String  @default("")
   phone       String
   whatsapp    String?
   email       String?
@@ -347,7 +344,6 @@ model BusinessMedia {
   type          MediaType
   url           String
   thumbnail_url String?
-  caption       String?
   sort_order    Int       @default(0)
   created_at    DateTime  @default(now())
 
@@ -356,16 +352,12 @@ model BusinessMedia {
   @@index([business_id, type])
 }
 
-// Key-value attributes per business (e.g. "WiFi: Yes", "Parking: Street")
-model BusinessAttribute {
+model BusinessAmenity {
   id          String @id @default(cuid())
+  name        String
   business_id String
-  key         String
-  value       String
 
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
-
-  @@unique([business_id, key])
 }
 
 model BusinessClaim {
@@ -400,22 +392,16 @@ model BusinessFAQ {
   @@index([business_id])
 }
 
-// Reviews
-
-model Review {
-  id               String       @id @default(cuid())
-  business_id      String
-  user_id          String
-  rating           Int // 1–5
-  title            String?
-  body             String?
-  status           ReviewStatus @default(PUBLISHED)
-  helpful_count    Int          @default(0)
-  owner_reply      String?
-  owner_replied_at DateTime?
-  created_at       DateTime     @default(now())
-  updated_at       DateTime     @updatedAt
-  deleted_at       DateTime?
+model BusinessReview {
+  id            String       @id @default(cuid())
+  business_id   String
+  user_id       String
+  rating        Int // 1–5
+  text          String?
+  status        ReviewStatus @default(PUBLISHED)
+  helpful_count Int          @default(0)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
 
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [user_id], references: [id])
@@ -424,31 +410,8 @@ model Review {
   @@index([business_id, status])
 }
 
-// Bookings & Leads
-
-model Booking {
-  id            String        @id @default(cuid())
-  business_id   String
-  user_id       String
-  service_name  String?
-  scheduled_at  DateTime
-  duration_mins Int?
-  status        BookingStatus @default(PENDING)
-  notes         String?
-  amount        Int? // in paise (₹1 = 100 paise)
-  payment_id    String?
-  created_at    DateTime      @default(now())
-  updated_at    DateTime      @updatedAt
-
-  business Business @relation(fields: [business_id], references: [id])
-  user     User     @relation(fields: [user_id], references: [id])
-  payment  Payment? @relation(fields: [payment_id], references: [id])
-
-  @@index([business_id, scheduled_at])
-  @@index([user_id])
-}
-
-model Lead {
+// Leads
+model BusinessLead {
   id          String     @id @default(cuid())
   business_id String
   user_id     String?
@@ -466,6 +429,32 @@ model Lead {
 
   @@index([business_id, status])
   @@index([phone])
+}
+
+// Saved Businesses
+
+model SavedBusiness {
+  user_id     String
+  business_id String
+  created_at  DateTime @default(now())
+
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, business_id])
+}
+
+// Notifications
+
+model Notification {
+  id         String   @id @default(cuid())
+  user_id    String
+  text       String
+  type       String
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 // Subscriptions & Payments
@@ -500,62 +489,15 @@ model Payment {
   updated_at          DateTime      @updatedAt
 
   subscription Subscription? @relation(fields: [subscription_id], references: [id])
-  bookings     Booking[]
 
   @@index([razorpay_payment_id])
 }
 
-// Saved Businesses
-
-model SavedBusiness {
-  user_id     String
-  business_id String
-  created_at  DateTime @default(now())
-
-  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
-
-  @@id([user_id, business_id])
-}
-
-// Notifications
-
-model Notification {
-  id         String    @id @default(cuid())
-  user_id    String
-  title      String
-  body       String
-  type       String // booking_confirmed | new_review | lead | etc.
-  data       Json?
-  read_at    DateTime?
-  created_at DateTime  @default(now())
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id, read_at])
-}
-
-// Analytics
-
-model AnalyticsEvent {
-  id          String   @id @default(cuid())
-  business_id String
-  event_type  String // view | call_click | direction_click | whatsapp_click | website_click
-  session_id  String?
-  user_id     String?
-  metadata    Json?
-  created_at  DateTime @default(now())
-
-  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
-
-  @@index([business_id, event_type, created_at])
-}
-
 model Country {
   id           String @id @default(cuid())
-  name         String
-  flag         String
-  iso_code     String
+  name         String @unique
+  flag         String @unique
+  iso_code     String @unique
   country_code String
 
   // Relations
@@ -564,7 +506,7 @@ model Country {
 
 model State {
   id         String @id @default(cuid())
-  name       String
+  name       String @unique
   country_id String
 
   // Relations
@@ -573,43 +515,33 @@ model State {
 }
 
 model City {
-  id          String  @id @default(cuid())
-  name        String
-  description String
-  image       String
-  metro_map   String?
-  latitude    Float
-  longitude   Float
-  state_id    String
+  id       String @id @default(cuid())
+  name     String @unique
+  state_id String
 
   // Relations
-  places         Place[]
-  areas          Area[]
-  foods          Food[]
-  metro_stations MetroStation[]
-  state          State          @relation(fields: [state_id], references: [id])
+  areas Area[]
+  state State  @relation(fields: [state_id], references: [id])
 }
 
 model Area {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   name    String
-  pincode String
+  pincode String?
   city_id String
 
   // Relations
   city City @relation(fields: [city_id], references: [id])
 }
 
-model Place {
-  id          String @id @default(cuid())
-  name        String
+model MyCity {
+  id          String  @id @default(cuid())
+  city        String
   description String
   image       String
-  langitude   Float
-  latitude    Float
-  city_id     String
-
-  city City @relation(fields: [city_id], references: [id])
+  metro_map   String?
+  foods       Food[]
+  places      Place[]
 }
 
 model Food {
@@ -617,19 +549,15 @@ model Food {
   name        String
   description String
   image       String
-  city_id     String
-
-  // Relations
-  city City @relation(fields: [city_id], references: [id])
+  mycity_id   String
+  mycity      MyCity @relation(fields: [mycity_id], references: [id])
 }
 
-model MetroStation {
-  id        String @id @default(cuid())
-  name      String
-  city_id   String
-  langitude Float
-  latitude  Float
-
-  // Relations
-  city City @relation(fields: [city_id], references: [id])
+model Place {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  image       String
+  mycity_id   String
+  mycity      MyCity @relation(fields: [mycity_id], references: [id])
 }

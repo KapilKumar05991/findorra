@@ -5,22 +5,27 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
+    const session = await auth()
+
+    if (!session || !session.user) {
+        return NextResponse.json({
+            success: false,
+            error: "Unauthorized"
+        }, { status: 401 })
+    }
     try {
         const business = await prisma.business.findUnique({
             where: {
-                id
+                id,
+                owner_id: session.user.id
             },
             include: {
                 attributes: true,
                 location: true,
                 contact: true,
                 media: true,
-                faqs: true,
-                reviews: {
-                    include: {
-                        user: true
-                    }
-                }
+                categories: true,
+                leads: true
             }
         })
 
@@ -35,7 +40,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             data: business
         })
     } catch (error) {
-        console.log("[BUSINESSES_ID_GET]", error)
         return NextResponse.json({
             success: false,
             error: "Something went wrong"
@@ -95,7 +99,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 
     } catch (error) {
-        console.log("[BUSINESSES_ID_PATCH]", error)
         return NextResponse.json({
             success: false,
             error: "Something went wrong"
@@ -145,7 +148,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
         })
 
     } catch (error) {
-        console.log("[BUSINESSES_ID_DELETE]", error)
+        console.log(error)
         return NextResponse.json({
             success: false,
             error: "Something went wrong"

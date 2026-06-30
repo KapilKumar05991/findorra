@@ -1,109 +1,32 @@
 import { auth } from "@/lib/auth";
-import { getUserBusinessByName } from "@/lib/queries/business";
 import { businessSchema } from "@/schemas/zod";
 import slugGenerator from "@/utils/slug-generator";
-import { Business, prisma } from "@repo/db";
-import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@repo/db";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
+
+export async function GET(req: Request) {
     try {
-        const { searchParams } = req.nextUrl;
-        const q = searchParams.get("q")
-        const city = searchParams.get("city")
-        const area = searchParams.get("area")
-
-        console.log({
-            q,
-            city,
-            area
-        })
-
-        if (!q || !city) {
+        const session = await auth()
+        if (!session || !session.user.id) {
             return NextResponse.json(
-                { error: "Query and city are required" },
-                { status: 400 }
+                { error: "Unauthorized" },
+                { status: 401 }
             );
         }
-
-
-        const catExist = await prisma.category.findUnique({
+        const businesses = await prisma.business.findMany({
             where: {
-                slug: q.toLowerCase()
+                owner_id: session.user.id
             }
         })
-
-        let businesses: Business[] = []
-
-        if (catExist) {
-            const listings = await prisma.business.findMany({
-                where: {
-                    location: {
-                        city: {
-                            equals: city,
-                            mode: "insensitive"
-                        },
-                        area: area ? {
-                            equals: area,
-                            mode: "insensitive"
-                        } : undefined
-                    },
-                    categories: {
-                        some: {
-                            category_id: catExist.id
-                        }
-                    },
-                    status: "ACTIVE"
-                },
-                include: {
-                    location: true,
-                    contact: true,
-                    attributes: true,
-                }
-            })
-
-            businesses = businesses.concat(listings)
-        } else {
-            const listings = await prisma.business.findMany({
-                where: {
-                    location: {
-                        city: {
-                            equals: city,
-                            mode: "insensitive"
-                        },
-                        area: area ? {
-                            equals: area,
-                            mode: "insensitive"
-                        } : undefined
-                    },
-                    name: {
-                        startsWith: q,
-                        mode: "insensitive"
-                    },
-                    status: "ACTIVE"
-                },
-                include: {
-                    location: true,
-                    contact: true,
-                    attributes: true,
-                }
-            })
-
-            businesses = businesses.concat(listings)
-
-        }
-
         return NextResponse.json({
             success: true,
             message: "Businesses fetched",
             data: businesses
         })
-
     } catch (error) {
-        console.error("[BUSINESSES_GET]", error);
-        return NextResponse.json({
-            success: false,
-            error: "Failed to fetch businesses",
-        },
+        return NextResponse.json(
+            { error: "Failed to get businesses" },
             { status: 500 }
         );
     }
@@ -149,8 +72,6 @@ export async function POST(req: Request) {
             bizSlug = slugGenerator(data.name, data.city)
         }
 
-        bizSlug = bizSlug + "-" + crypto.randomUUID()
-
         const business = await prisma.business.create({
             data: {
                 name: data.name,
@@ -175,7 +96,6 @@ export async function POST(req: Request) {
         })
 
     } catch (error) {
-        console.error("[BUSINESSES_POST]", error);
         return NextResponse.json(
             { error: "Failed to create business" },
             { status: 500 }

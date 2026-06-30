@@ -27,6 +27,12 @@ const businessHoursFormSchema = z.object({
     close: z.string().min(1, "Select close time"),
 })
 
+
+async function fetchHours(bizId: string) {
+    const res = await fetch(`/api/businesses/${bizId}/hours`)
+    return await res.json();
+}
+
 async function createHours(bizId: string, data: z.infer<typeof businessHoursSchema>) {
     const res = await fetch(`/api/businesses/${bizId}/hours`, {
         method: "POST",
@@ -64,25 +70,31 @@ export default function HoursForm({ bizId, action, update = false }: Props) {
 
     const selectedDays = form.watch("days")
 
-    useEffect(() => {
-        if (selectedDays.length < 7) {
-            setChecked(false)
-        }
-    }, [selectedDays])
 
     useEffect(() => {
         if (update) {
             startTransition(async () => {
-                const res = await fetch(`/api/businesses/${bizId}/hours`)
-                const result = await res.json()
-                if(result.success) {
-                    console.log(result.data)
+                const result = await fetchHours(bizId)
+                if (result.success) {
+                    const days = result.data.map((hour: any) => (hour.day))
+                    const openTime = result.data[0].open
+                    const closeTime = result.data[0].close
+                    if (days.length == 7) {
+                        setChecked(true)
+                    }
+                    form.setValue("days", days)
+                    form.setValue("open", openTime)
+                    form.setValue("close", closeTime)
                 } else {
-                    
+                    toast.error(result.error)
                 }
             })
         }
     }, [])
+
+    useEffect(() => {
+        if (selectedDays.length < 7) { setChecked(false) }
+    }, [selectedDays])
 
     function toogleCheck(check: boolean) {
         if (check) {
@@ -262,8 +274,7 @@ export default function HoursForm({ bizId, action, update = false }: Props) {
                 </FieldSet>
 
                 <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={action}>Skip</Button>
-                    <Button disabled={isPending} className="cursor-pointer" form="hours-form" type="submit">{isPending ? <Loader2 className="size-5 animate-spin" /> : "Save & Continue"}</Button>
+                    <Button disabled={isPending} className="cursor-pointer" form="hours-form" type="submit">{isPending ? <Loader2 className="size-5 animate-spin" /> : "Save"}</Button>
                 </div>
             </FieldGroup>
         </form >

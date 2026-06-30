@@ -26,7 +26,7 @@ async function getPostoffice(pincode: string) {
 
 export default function FreeListing() {
     const [tab, setTab] = useState("0")
-    const [bizId, setBizId] = useState<string | null>("cmosl16k4000cvoucjccqcn26")
+    const [bizId, setBizId] = useState<string | null>()
     const [areas, setAreas] = useState<string[]>([])
     const [isPending, startTransition] = useTransition();
 
@@ -205,13 +205,13 @@ export default function FreeListing() {
                 </form>
             </TabsContent>
             <TabsContent className="py-4" value="1">
-                <ContactForm bizId={bizId!} setStep={setTab} />
+                <ContactForm bizId={bizId!} action={() => { setTab("2") }} />
             </TabsContent>
             <TabsContent className="py-4" value="2">
                 <HoursForm bizId={bizId!} action={() => {setTab("3") }} />
             </TabsContent>
             <TabsContent className="py-4" value="3">
-                <CategoryForm bizId={bizId!} setStep={setTab} />
+                <CategoryForm bizId={bizId!} action={() => {setTab("4") }} />
             </TabsContent>
             <TabsContent className="py-4" value="4">
                 <PhotosForm bizId={bizId!} setStep={setTab} />

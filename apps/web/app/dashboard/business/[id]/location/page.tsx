@@ -1,19 +1,20 @@
-import HoursForm from "@/components/listing/hours-form";
+import LocationForm from "@/components/listing/location-form";
 import { Card, CardContent, CardHeader } from "@repo/ui/components/card";
 
-type Props = {
+type Prop = {
     params: Promise<{ id: string }>
 }
-export default async function Page({ params }: Props) {
-    const { id } = await params
+
+export default async function Page({params}: Prop) {
+    const {id} = await params
     return (
         <main className="p-4">
             <Card>
                 <CardHeader className="text-xl font-semibold">
-                    Manage Your Business Hours
+                    Manage Business Location
                 </CardHeader>
                 <CardContent>
-                    <HoursForm bizId={id} update={true} />
+                    <LocationForm bizId={id} update={true}/>
                 </CardContent>
             </Card>
         </main>

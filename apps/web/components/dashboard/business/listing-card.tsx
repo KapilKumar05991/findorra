@@ -19,7 +19,7 @@ export function ListingCard({ listing }: Prop) {
                     <div className="space-y-4">
                         <h2 className="text-xl">{listing.name}</h2>
                         <p>Listed on {new Date(listing.created_at).toDateString()}</p>
-                        <p>Status: {listing.status}</p>
+                        <p>Status: {listing.status.replaceAll('_', ' ')}</p>
                     </div>
                 </CardContent>
             </Card>

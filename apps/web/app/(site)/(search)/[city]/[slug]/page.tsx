@@ -2,6 +2,7 @@ import BusinessCard from "@/components/business/business-card";
 import EnquiryForm from "@/components/business/enquiry-form";
 import PromoBar from "@/components/layout/advertise/promobar";
 import { SearchFilters } from "@/components/layout/search/search-filters";
+import Error from "@/components/layout/shared/error";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -11,30 +12,47 @@ import {
     BreadcrumbSeparator,
 } from "@repo/ui/components/breadcrumb"
 import { Card, CardContent } from "@repo/ui/components/card";
+import axios from "axios"
 
 const api_url = process.env.AUTH_URL
 
-async function fetchBusinesses(city: string, slug: string) {
+async function fetchBusinesses(city: string, slug: string, postcode: any) {
     const arr = slug.split('-in-')
     const q = arr[0]
     const area = arr.length > 1 ? arr[1].replaceAll('-', ' ') : ""
-    const url = new URL(`${api_url}/api/businesses`)
+
+    const url = new URL(`${api_url}/api/search/businesses`)
     url.searchParams.set("q", q)
     if (area) { url.searchParams.set("area", area) }
     url.searchParams.set("city", city)
-    const response = await fetch(url)
-    const result = await response.json()
-    if (result.success) {
-        return result.data
+    if (postcode) { url.searchParams.set("postcode", postcode) }
+
+    try {
+        const res = await axios.get(url.toString())
+        return res.data
+    } catch (error: any) {
+        console.log(error)
+        return error.response.data
     }
-    return []
 }
 
 
-export default async function Page({ params }: { params: Promise<{ city: string, slug: string }> }) {
+export default async function Page({ params, searchParams }: {
+    params: Promise<{ city: string, slug: string }>,
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
     const { city, slug } = await params
-    const listings = await fetchBusinesses(city, slug)
-    console.log(listings)
+    const { postcode } = await searchParams
+
+
+    const res = await fetchBusinesses(city, slug, postcode)
+
+    if (!res.success) {
+        return <Error error={res.data.error} message="Something went wrong" />
+    }
+
+    const listings = res.data.data
+
     return (
         <div className="w-full">
             <section className="container mx-auto p-4 md:px-10">

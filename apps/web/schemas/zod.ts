@@ -68,6 +68,13 @@ export const editSchema = z.object({
   })
 })
 
+export const editBusinessSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  tagline: z.string().optional(),
+  description: z.string().optional(),
+  yoe: z.string().optional(),
+})
+
 export const businessSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
@@ -110,4 +117,13 @@ export const businessCategoriesSchema = z.object({
 
 export const businessGallerySchema = z.object({
   files: z.array(z.file())
+})
+
+export const businessLocationSchema = z.object({
+  address: z.string().min(1, "Address is required"),
+  area: z.string().optional(),
+  city: z.string().min(1, "City is required"),
+  state: z.string().min(1, "State is required"),
+  pincode: z.string().min(1, "Pincode is required"),
+  landmark: z.string().optional()
 })

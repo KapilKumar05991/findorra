@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import useDebounce from "@repo/ui/hooks/useDebounce";
 import { InputGroupAddon, InputGroupButton } from "@repo/ui/components/input-group";
-import { MapPin, Search } from "lucide-react";
+import { MapPin, Search, TrendingUp } from "lucide-react";
 import { Combobox, ComboboxCollection, ComboboxContent, ComboboxEmpty, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxLabel, ComboboxList } from "@repo/ui/components/combobox";
 import {
     Item,
@@ -12,20 +12,14 @@ import {
     ItemMedia,
     ItemTitle,
 } from "@repo/ui/components/item"
-import { cities } from "@/constants/cities";
-import { Business, Category } from "@repo/db";
 import { useSearchStore } from "@/stores/search-store";
+import axios from "axios";
+import cities from "@/constants/cities"
 
 const api_url = process.env.AUTH_URL || "http://localhost:3000"
 
-
-async function fetchServiceSuggestions(query: string, city: string) {
-    const res = await fetch(`${api_url}/api/suggestions/services?q=${query}&city=${city}`)
-    const data = await res.json()
-    return data
-}
-
 function SearchBar() {
+    const [isPending, startTransition] = useTransition()
     const params = useParams<{
         city: string,
         slug: string,
@@ -34,95 +28,147 @@ function SearchBar() {
 
     const router = useRouter()
     const pathname = usePathname()
+
+    const defaultLocations = [
+        {
+            type: "Current Location",
+            items: []
+        },
+        {
+            type: "Trending Searches",
+            items: [
+                { place_id: "1", address_line1: "", city: "Mumbai", state: "Maharashtra", postcode: "400001", country: "India" },
+                { place_id: "2", address_line1: "", city: "Delhi", state: "Delhi", postcode: "110001", country: "India" },
+                { place_id: "3", address_line1: "", city: "Hyderabad", state: "Telangana", postcode: "500001", country: "India" },
+                { place_id: "4", address_line1: "", city: "Bangalore", state: "Karnataka", postcode: "560001", country: "India" },
+                { place_id: "5", address_line1: "", city: "Chennai", state: "Tamil Nadu", postcode: "600001", country: "India" },
+                { place_id: "6", address_line1: "", city: "Kolkata", state: "West Bengal", postcode: "700001", country: "India" },
+                { place_id: "7", address_line1: "", city: "Pune", state: "Maharashtra", postcode: "411001", country: "India" },
+                { place_id: "8", address_line1: "", city: "Ahmedabad", state: "Gujarat", postcode: "380001", country: "India" },
+            ]
+        },
+        {
+            type: "Suggested Areas",
+            items: []
+        },
+        {
+            type: "Location Search",
+            items: []
+        }
+    ]
     const defaultServices = [
         {
-            type: "Category",
+            type: "Search Popular",
             items: [
-                { name: "Hotels", slug: "Hotels", type: "Category", id: "1" },
-                { name: "Restaurants", slug: "Restaurants", type: "Category", id: "2" },
-                { name: "Dentists", slug: "Dentists", type: "Category", id: "3" },
-                { name: "Schools", slug: "Schools", type: "Category", id: "4" },
-                { name: "Education", slug: "Education", type: "Category", id: "5" },
-                { name: "Real Estates", slug: "Real-Estates", type: "Category", id: "6" },
+                { name: "Hotels", slug: "Hotels", sort_order: "1", id: "1" },
+                { name: "Restaurants", slug: "Restaurants", sort_order: "1", id: "2" },
+                { name: "Dentists", slug: "Dentists", sort_order: "2", id: "3" },
+                { name: "Schools", slug: "Schools", sort_order: "2", id: "4" },
+                { name: "Education", slug: "Education", sort_order: "3", id: "5" },
+                { name: "Real Estates", slug: "Real-Estates", sort_order: "3", id: "6" },
             ],
         },
         {
-            type: "Business",
+            type: "Search Business",
             items: [],
         }
     ]
 
-    const {city,setCity,query,setQuery} = useSearchStore(state => state)
-    const [service, setService] = useState({ name: "", slug: "", type: "", id: "" })
+    const { city, setSearchLocation, area, postcode, setLocQuery, locQuery, query, setQuery } = useSearchStore(state => state)
+    const [service, setService] = useState({ is_active: false, name: "", slug: "", id: "" })
+    const [location, setLocation] = useState<any>({ place_id: "1", address_line1: "", city: "Delhi", state: "Delhi", postcode: "110001", country: "India" })
     const [services, setServices] = useState(defaultServices)
-    const debouncedQuery = useDebounce(query, 500)
+    const [locations, setLocations] = useState(defaultLocations)
+    const debouncedQuery = useDebounce(query, 250)
+    const debounceLocQuery = useDebounce(locQuery, 250)
 
 
-    async function setSuggestions() {
-        
-        const result = await fetchServiceSuggestions(debouncedQuery, city)
-        if (result.success) {
-            const suggestCategories = result.data.categories
-            const suggestBusinesses = result.data.businesses
-            const categoriesItems = suggestCategories.map((category: Category) => { return { name: category.name, slug: category.slug, type: "Category", id: category.id } })
-            const businessesItems = suggestBusinesses.map((business: Business) => { return { name: business.name, slug: business.slug, type: "Business", id: business.id } })
+    const controller = useRef(new AbortController())
 
-            console.log(categoriesItems)
-            console.log(businessesItems)
-            setServices([
-                {
-                    type: "Category",
-                    items: categoriesItems,
-                },
-                {
-                    type: "Business",
-                    items: businessesItems,
+    async function fetchLocationSuggestion(query: string, postcode: string) {
+        try {
+            controller.current.abort()
+            controller.current = new AbortController()
+            const res = await axios.get(`${api_url}/api/suggestions/location?q=${query}&postcode=${postcode}`, {
+                signal: controller.current.signal
+            })
+            return res.data
+        } catch (error: any) {
+            return error.response.data
+        }
+    }
+
+    async function fetchServiceSuggestion(query: string, postcode: string, city: string) {
+        try {
+            controller.current.abort()
+            controller.current = new AbortController()
+            const res = await axios.get(`${api_url}/api/suggestions/services?q=${query}&city=${city}&postcode=${postcode}`, {
+                signal: controller.current.signal
+            })
+            return res.data
+        } catch (error: any) {
+            return error.response.data
+        }
+    }
+
+    useEffect(() => {
+        if (!city && params.city) {
+            const exist = cities.find((c: string) => c.toLowerCase() === params.city.toLowerCase())
+            if (exist) {
+                setSearchLocation(params.city, "", "")
+            }
+        }
+    }, [params])
+
+    useEffect(() => {
+        if (service.is_active) {
+            router.replace(`/${city}/${service.slug}${area && area !== city ? `-in-${area}` : ""}${postcode ? `?postcode=${postcode}` : ""}`)
+        } else if (service.slug) {
+            router.replace(`/${city}/${service.slug}/${service.id}`)
+        }
+    }, [service, city, area])
+
+
+    useEffect(() => {
+
+        if (location.place_id) {
+            setSearchLocation(location.city, location.address_line1, location.postcode || "")
+        } else {
+            setSearchLocation(location.District, location.Name, location.Pincode)
+        }
+    }, [location])
+
+    useEffect(() => {
+        if (debounceLocQuery) {
+            startTransition(async () => {
+                const result = await fetchLocationSuggestion(debounceLocQuery, postcode)
+                if (result.success) {
+                    const locs = [
+                        { type: "Suggested Areas", items: result.offices },
+                        { type: "Suggested Locations", items: result.locations }
+                    ]
+                    setLocations(locs)
                 }
-            ])
+            })
+        }
+
+    }, [debounceLocQuery])
+
+    useEffect(() => {
+        if (debouncedQuery.length) {
+            startTransition(async () => {
+                const result = await fetchServiceSuggestion(debouncedQuery, postcode, city)
+                if (result.success) {
+                    setServices([
+                        { type: "Search Category", items: result.categories },
+                        { type: "Search Business", items: result.businesses },
+                    ])
+                }
+            })
         } else {
             setServices(defaultServices)
         }
-    }
-    function handleSearch(data: typeof service) {
-        if (data.type == 'Category') {
-            const url = `${api_url}/${city}/${data.slug}`
-            router.replace(url)
-
-        } else {
-            const url = `${api_url}/${city}/${data.slug}/${data.id}`
-            router.replace(url)
-        }
-    }
-
-    useEffect(() => { 
-        if(params.city) {
-            const exist = cities.includes(params.city)
-            if(exist) {
-                setCity(params.city)
-            } else {
-                const currentUrl = pathname
-                const arr = currentUrl.split('/')
-                arr[1] = city
-                router.replace(arr.join('/'))
-            }
-        }
-     }, [params])
-    useEffect(() => {
-        console.log("Selected City", city)
-    }, [city])
-
-    useEffect(() => {
-        console.log("Selected Service", service)
-        if (service.name) { 
-            handleSearch(service)
-        } else {}
-    }, [service])
-
-    useEffect(() => {
-        if(query.trim().length > 2) {
-            setSuggestions()
-        }
-    }, [query])
+    }, [debouncedQuery])
 
 
     return (
@@ -130,23 +176,47 @@ function SearchBar() {
          bg-white text-black border-gray-200 rounded-md sm:rounded-full
           flex flex-wrap md:flex-nowrap">
             <div className="relative w-full md:w-1/2">
-                <Combobox onValueChange={(value) => { value ? setCity(value) : setCity("Agra") }} value={city} items={cities}>
-                    <ComboboxInput className="h-10 hover:bg-gray-50 hover:border border-white shadow-none hover:border-gray-200 rounded-full" placeholder="Select Location">
+                <Combobox
+                    onValueChange={(value) => { value && setLocation(value) }}
+                    onInputValueChange={(value) => { value && setLocQuery(value) }}
+                    itemToStringLabel={(value: any) => (value.address_line1 || value.city || value.Name)}
+                    itemToStringValue={(value: any) => (value.address_line1 || value.city|| value.Name)}
+                    value={location}
+                    items={locations}>
+                    <ComboboxInput className="h-10 hover:bg-gray-50 hover:border border-white shadow-none hover:border-gray-200 rounded-full" placeholder="Select Location"
+                    >
                         <InputGroupAddon>
                             <MapPin />
                         </InputGroupAddon>
                     </ComboboxInput>
-                    <ComboboxContent alignOffset={-10} className="w-60">
-                        <ComboboxEmpty>No Results Found</ComboboxEmpty>
+                    <ComboboxContent alignOffset={-10} className="w-sm">
+                        <ComboboxEmpty>{isPending ? "Loading ..." : "No Results Found"}</ComboboxEmpty>
                         <ComboboxList>
-                            <ComboboxList>
-                                {(item) => (
-                                    <ComboboxItem key={item} value={item}>
-                                        {item}
-                                    </ComboboxItem>
-                                )}
-                            </ComboboxList>
 
+                            {(group) => (
+                                <ComboboxGroup key={group.type} items={group.items}>
+                                    <ComboboxLabel>{group.type}</ComboboxLabel>
+                                    <ComboboxCollection>
+                                        {(item) => (
+                                            <ComboboxItem key={item.place_id || item.Name} value={item}>
+                                                <Item size="xs" className="p-0">
+                                                    <ItemMedia variant="image">
+                                                        <MapPin />
+                                                    </ItemMedia>
+                                                    <ItemContent>
+                                                        <ItemTitle>
+                                                            {item.address_line1 || item.Name} {item.city && item.city !== item.address_line1 ? `${item.city}` : ''} {item.District && item.District !== item.Name ? `${item.District}` : ''}
+                                                        </ItemTitle>
+                                                        <ItemDescription>
+                                                             {item.Circle ? `${item.Circle}, ` : ''}{item.state ? `${item.state}, ` : ''}{item.country || item.Country}
+                                                        </ItemDescription>
+                                                    </ItemContent>
+                                                </Item>
+                                            </ComboboxItem>
+                                        )}
+                                    </ComboboxCollection>
+                                </ComboboxGroup>
+                            )}
                         </ComboboxList>
                     </ComboboxContent>
                 </Combobox>
@@ -156,9 +226,9 @@ function SearchBar() {
                 <Combobox
                     items={services}
                     itemToStringLabel={(value) => (value.name)}
-                    itemToStringValue={(value) => (value.value)}
-                    onInputValueChange={(value) => { value ? setQuery(value) : setQuery("") }}
-                    onValueChange={(value: any) => { value ? setService(value) : setService({ name: "", slug: "", type: "", id: "" }) }}>
+                    itemToStringValue={(value) => (value.name)}
+                    onInputValueChange={(value) => { value && setQuery(value) }}
+                    onValueChange={(value: any) => { value && setService(value) }}>
                     <ComboboxInput showTrigger={false} className="h-10 hover:bg-gray-50 hover:border border-white shadow-none hover:border-gray-200 rounded-full" placeholder="Select For Services">
                         <InputGroupAddon>
                             <Search />
@@ -166,14 +236,14 @@ function SearchBar() {
                         <InputGroupButton
                             variant="default"
                             className="size-9 rounded-full cursor-pointer"
-                            onClick={() => handleSearch(service)}
+                            onClick={() => { console.log('coming soon') }}
                         >
                             <Search className="size-5" />
                             <span className="sr-only">Search</span>
                         </InputGroupButton>
                     </ComboboxInput>
                     <ComboboxContent alignOffset={-5} className="">
-                        <ComboboxEmpty>No Results Found</ComboboxEmpty>
+                        <ComboboxEmpty>{isPending ? "Loading ..." : "No Results Found"}</ComboboxEmpty>
                         <ComboboxList>
                             {(group) => (
                                 <ComboboxGroup key={group.type} items={group.items}>
@@ -190,7 +260,7 @@ function SearchBar() {
                                                             {item.name}
                                                         </ItemTitle>
                                                         <ItemDescription>
-                                                            {item.type}
+                                                            {item.sort_order ? "Category" : "Business"}
                                                         </ItemDescription>
                                                     </ItemContent>
                                                 </Item>

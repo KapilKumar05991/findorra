@@ -1,22 +1,12 @@
-import { auth } from "@/lib/auth"
 import { prisma } from "@repo/db"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const session = await auth()
-
-    if (!session || !session.user) {
-        return NextResponse.json({
-            success: false,
-            error: "Unauthorized"
-        }, { status: 401 })
-    }
     try {
         const business = await prisma.business.findUnique({
             where: {
-                id,
-                owner_id: session.user.id
+                id
             },
             include: {
                 attributes: true,
@@ -28,9 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                     include: {
                         user: true
                     }
-                },
-                categories: true,
-                leads: true
+                }
             }
         })
 

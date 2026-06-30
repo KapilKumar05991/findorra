@@ -3,6 +3,76 @@ import { businessCategoriesSchema } from "@/schemas/zod";
 import { prisma } from "@repo/db";
 import { NextRequest, NextResponse } from "next/server";
 
+export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const session = await auth()
+    try {
+        if (!session || !session.user.id) {
+            return NextResponse.json({
+                success: false,
+                error: "Unauthorized",
+            }, { status: 401 })
+        }
+        const business = await prisma.business.findUnique({
+            where: {
+                id,
+                owner_id: session.user.id
+            }
+        })
+
+        if (!business) {
+            return NextResponse.json({
+                success: false,
+                error: "Forbidden"
+            }, { status: 403 })
+
+        }
+
+        const primaryCat = await prisma.businessCategory.findFirst({
+            where: {
+                business_id: business.id,
+                is_primary: true
+            },
+            include: {
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }
+            }
+        })
+        const secondaryCats = await prisma.businessCategory.findMany({
+            where: {
+                business_id: id,
+                is_primary: false
+            },
+            include: {
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                    }
+                }
+            }
+        })
+        return NextResponse.json({
+            success: true,
+            message: "Category Fetched",
+            data: {
+                primary:primaryCat,
+                secondary:secondaryCats
+            }
+        })
+    } catch (error) {
+        console.log("[GET] /api/businesses/[id]/category Error:", error)
+        return NextResponse.json({
+            success: false,
+            error: "Internal Server Error"
+        }, { status: 500 })
+    }
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await auth()
     if (!session || !session.user.id) {
@@ -56,7 +126,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 category_id: cat
             }))
         })
-       
+
         return NextResponse.json({
             success: true,
             message: "Category Updated",
@@ -66,7 +136,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             }
         })
     } catch (error) {
-        console.log("[POST] /api/businesses/[id]/category Error:",error)
+        console.log("[POST] /api/businesses/[id]/category Error:", error)
         return NextResponse.json({
             success: false,
             error: "Internal Server Error"

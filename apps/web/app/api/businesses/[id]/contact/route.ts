@@ -3,6 +3,46 @@ import { businessContactSchema } from "@/schemas/zod";
 import { prisma } from "@repo/db";
 import { NextRequest, NextResponse } from "next/server";
 
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+
+    const { id } = await params
+    const session = await auth()
+
+    if (!session || !session.user.id) {
+        return NextResponse.json({
+            success: false,
+            error: "Unauthorized",
+        }, { status: 401 })
+    }
+
+    const business = await prisma.business.findUnique({
+        where: {
+            id,
+            owner_id: session.user.id
+        }
+    })
+
+    if (!business) {
+        return NextResponse.json({
+            success: false,
+            error: "Forbidden"
+        }, { status: 403 })
+    }
+
+    const contact = await prisma.contact.findUnique({
+        where: {
+            business_id: business.id
+        }
+    })
+    
+    return NextResponse.json({
+        success: true,
+        message: "Contact Fetched",
+        data: contact
+    })
+}
+
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await auth()
     if (!session || !session.user.id) {

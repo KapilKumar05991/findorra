@@ -15,14 +15,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         console.log(id)
         console.log(body)
+        // TODO: Create claim request
 
         return NextResponse.json({
             success: true,
-            message: "Hours added",
+            message: "Claim Request",
             data: {}
         })
     } catch (error) {
-        console.log("[BUSINESSES_ID_HOURS_POST]", error)
         return NextResponse.json(
             { error: "Failed to add hours" },
             { status: 500 }

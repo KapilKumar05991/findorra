@@ -16,7 +16,8 @@ import z from "zod";
 
 type Props = {
     bizId: string;
-    setStep: React.Dispatch<React.SetStateAction<string>>;
+    update?: boolean
+    action?: () => void;
 }
 
 
@@ -37,7 +38,7 @@ async function updatePhotos(bizId: string, files: File[]) {
     return await res.json()
 }
 
-export default function PhotosForm({ bizId, setStep }: Props) {
+export default function PhotosForm({ bizId, action, update = false }: Props) {
     const router = useRouter()
     const form = useForm<z.infer<typeof businessGallerySchema>>({
         resolver: zodResolver(businessGallerySchema),

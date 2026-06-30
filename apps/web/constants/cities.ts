@@ -1,4 +1,5 @@
-export const cities =  [
+
+const cities =  [
     "Abdul",
     "Adilabad",
     "Adwani",
@@ -4267,3 +4268,5 @@ export const cities =  [
     "Uttar Dinajpur district",
     "Uttarpara Kotrung"
   ]
+
+export default cities
